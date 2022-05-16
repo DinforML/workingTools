@@ -23,22 +23,36 @@ option.add_experimental_option("excludeSwitches", ["enable-logging"])
 option.add_experimental_option('excludeSwitches', ['enable-automation'])
 
 local_version = 'v1.0.0'
+url = "https://api.github.com/repos/DinforML/workingTools/releases/latest"
+download_url = "https://github.com/DinforML/workingTools/releases/download/%s/default.zip"
 
 def check_version():
 	response = requests.get(url)
 	online_version = response.json()['tag_name']
 
 	if local_version == online_version:
-		print(f"当前版本为最新版本[ {local_version}] ！")
+		print(f"当前版本为最新版本[ {local_version} ] ！")
 	else:
-		print("当前版本已过期，下载新版本中...")
-		r = requests.get(download_url % online_version)
 		name = 'WorkingTools ' + online_version.replace('/','_') + '.zip'
 		with open(name,'wb') as f:
-			f.write(r.content)
-		print("下载完毕。")
-		input(f'请使用新版本 {name}\n点击Enter关闭视窗...')
-		exit()
+			print("当前版本已过期，下载新版本中...")
+			response = requests.get(download_url % online_version, stream=True)
+			total_length = response.headers.get('content-length')
+
+			if total_length is None: # no content length header
+				f.write(response.content)
+			else:
+				dl = 0
+				total_length = int(total_length)
+				for data in response.iter_content(chunk_size=4096):
+					dl += len(data)
+					f.write(data)
+					done = int(50 * dl / total_length)
+					sys.stdout.write("\r[%s%s]" % ('#' * done, ' ' * (50-done)) )	
+					sys.stdout.flush()
+			print("下载完毕。")
+			input(f'请使用新版本 {name}\n点击Enter关闭视窗...')
+			exit()
 
 
 def clean():
