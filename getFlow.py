@@ -6,6 +6,7 @@ import csv
 import json
 import requests
 import pandas as pd
+from tqdm import tqdm
 from openpyxl  import load_workbook
 from getpass import getpass
 from selenium import webdriver
@@ -22,7 +23,7 @@ option.add_experimental_option('useAutomationExtension', False)
 option.add_experimental_option("excludeSwitches", ["enable-logging"])
 option.add_experimental_option('excludeSwitches', ['enable-automation'])
 
-local_version = 'v1.0.0'
+local_version = 'v1.1.0'
 url = "https://api.github.com/repos/DinforML/workingTools/releases/latest"
 download_url = "https://github.com/DinforML/workingTools/releases/download/%s/default.zip"
 
@@ -90,19 +91,18 @@ def login(driver):
 def Game_inquiry(driver):
 	go_system = WebDriverWait(driver, 20, 0.5).until(EC.visibility_of_element_located((By.XPATH, '//*[@id="root"]/div/ul/li/a')))
 	go_system.click()
-	#report_page = WebDriverWait(driver, 20, 0.5).until(EC.visibility_of_element_located((By.XPATH, '//*[@id="root"]/div/section/aside/div/ul/li[2]/div/span')))
+	#report_page = WebDriverWait(driver, 20, 0.5).until(EC.visibility_of_element_located((By.XPATH, '//span[text()="报表查询"]')))
 	#report_page.click()
-	#game_list = WebDriverWait(driver, 20, 0.5).until(EC.visibility_of_element_located((By.XPATH, '//*[@id="/system/report-query$Menu"]/li[1]/div/span')))
-	#game_list.click()
+	game_list = WebDriverWait(driver, 20, 0.5).until(EC.visibility_of_element_located((By.XPATH, '//a[text()="游戏注单查询"]')))
+	game_list.click()
 
 def sport_search(driver):
-	print("数据读取中...")
 	df = pd.read_excel("account.xlsx")
 	temp_list = []
 	before_username = ""
 	flow = ""
 	user_count = df.last_valid_index() + 1
-	for i in range(user_count):
+	for i in tqdm(range(user_count)):
 		username = str(df.iat[i,0])
 		username_input = WebDriverWait(driver, 20, 0.5).until(EC.visibility_of_element_located((By.XPATH, '//*[@id="create-form_username"]')))
 		username_input.clear()
@@ -136,17 +136,16 @@ def sport_search(driver):
 		time.sleep(0.5)
 	end = pd.DataFrame(temp_list)
 	end.to_csv("流水.csv",encoding="utf_8_sig")
-	print("完成")
+	print("体育流水完成。")
 
 def Nsport_search(driver):
-	print("数据读取中...")
 	df = pd.read_csv("流水.csv")
 	a = df.last_valid_index()
 	temp_list = []
 	before_username = ""
 	flow = ""
 	user_count = df.last_valid_index() + 1
-	for i in range(user_count):
+	for i in tqdm(range(user_count)):
 		username = str(df.iat[i,1])
 		sport = float(df.iat[i,2]) if df.iat[i,2] != "" else ""
 		sport_win = float(df.iat[i,3]) if df.iat[i,3] != "" else ""
@@ -250,7 +249,7 @@ if __name__ == "__main__":
 	driver.get(domain)
 	login(driver)
 	Game_inquiry(driver)
-	input("請先點進 遊戲注單查詢頁面 -> 篩選時間&體育場館 -> 篩選完後小黑窗按Enter #不需要點擊查詢")
+	input("請先點進 篩選時間&體育場館 -> 篩選完後小黑窗按Enter #不需要點擊查詢")
 	#get_list(driver)
 	sport_search(driver)
 	input("請篩選娱乐場館 -> 篩選完後小黑窗按Enter #不需要點擊查詢")
