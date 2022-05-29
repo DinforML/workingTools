@@ -31,8 +31,10 @@ fill in the form with the member account
 
 ### 6. data filter
 ![image](https://user-images.githubusercontent.com/105668107/170883318-961c322c-58f1-413a-aa1c-4f7b7b10ec25.png)
+
   '体育流水查询' & '娱乐流水查询' -> you must open browser and filter time and platform and press ENTER. wait for response **XX完成。**.
-  '最后投注时间查询' & '(代)充值次数查询' -> dont need to do anything. just wait for data out.
+  
+  '最后投注时间查询' & '(代)充值次数查询' & '上级代理查询' -> dont need to do anything. just wait for data out.
 
 ### 7. Result!
    '数据.csv' is your final data.
