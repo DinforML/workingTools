@@ -29,7 +29,7 @@ option.add_experimental_option("prefs", {"credentials_enable_service": False,"pr
 capabilities = DesiredCapabilities.CHROME
 capabilities["goog:loggingPrefs"] = {"performance": "ALL"}
 
-local_version = 'v1.2.0'
+local_version = 'v1.3.0'
 url = "https://api.github.com/repos/DinforML/workingTools/releases/latest"
 download_url = "https://github.com/DinforML/workingTools/releases/download/%s/default.zip"
 
@@ -57,9 +57,10 @@ def check_version():
 		if os.path.getsize(name) != 0:
 			with zipfile.ZipFile(name,"r") as zip_ref:
 				zip_ref.extractall()
-			os.rename('default',f'WorkingTools-{online_version}')
-			os.startfile(f'WorkingTools-{online_version}')
-		input(f'请使用新版本 {name}\npress ENTER to quit...')
+			#os.rename('default',f'WorkingTools-{online_version}')
+			os.remove(name)
+		input(f'请使用新版本 {online_version}\npress ENTER to quit...')
+		os.start('getFlow.exe')
 		exit()
 
 
@@ -115,15 +116,19 @@ def get_responce_Info():
 			data = driver.execute_cdp_cmd("Network.getResponseBody", {"requestId": request_id})['body']
 			data = json.loads(data)
 			if data['message'].lower() == 'success':
-				try:
-					lastBetTime = timeStamp(data['data']['lastBettingTime'])
-					lastBet = f"{lastBetTime}"
-				except:
-					lastBet = "无投注"
-				#return usr_Info , lastBet
-				return lastBet
+				lastBetTime = str(timeStamp(data['data']['lastBettingTime'])) if data['data']['lastBettingTime'] else "无投注"
 			else:
-				return data['message']	
+				return '账号错误' , '账号错误' , '账号错误'
+		if resp_url == "http://fundmng.m6admin.com/api/manage/data/trend/userFund":
+			data = driver.execute_cdp_cmd("Network.getResponseBody", {"requestId": request_id})['body']
+			data = json.loads(data)
+			if data['message'].lower() == 'success':
+				rechargeTimes = str(data['data']['rechargeNum'])
+				upAmountTimes = str(data['data']['upAmountTimes'])
+			else:
+				rechargeTimes = upAmountTimes = '-'
+	return lastBetTime, rechargeTimes , upAmountTimes
+
 
 def Game_inquiry(driver):
 	game_list = WebDriverWait(driver, 20, 0.5).until(EC.visibility_of_element_located((By.XPATH, '//a[text()="游戏注单查询"]')))
@@ -238,37 +243,61 @@ def user_info_search(driver,temp_list,sportCheck,NsportCheck):
 	before_username = ""
 	flow = ""
 	user_count = df.last_valid_index() + 1
+	counting = 0
+	error_acc = []
 	for i in tqdm(range(user_count)):
-		username = str(df.iat[i,0])
-		input_username = WebDriverWait(driver, 20, 0.5).until(EC.visibility_of_element_located((By.XPATH,'//*[@id="root"]/div/section/section/header[2]/div/div[2]/span/span/span[1]/input')))
-		input_username.clear()
-		input_username.send_keys(username)
-		input_username.send_keys(Keys.ENTER)
-		time.sleep(0.5)
-		lastBet = get_responce_Info()
+		while True:
+			try:
+				username = str(df.iat[i,0])
+				input_username = WebDriverWait(driver, 20, 0.5).until(EC.visibility_of_element_located((By.XPATH,'//*[@id="root"]/div/section/section/header[2]/div/div[2]/span/span/span[1]/input')))
+				input_username.clear()
+				input_username.send_keys(username)
+				input_username.send_keys(Keys.ENTER)
+				time.sleep(0.5)
+				lastBet , rechargeTimes , upAmountTimes = get_responce_Info()
+				break
+			except:
+				driver.refresh()
+		error_acc.append(username) if lastBet == '账号错误' else error_acc
 		if temp_list != []:
 			if sportCheck or NsportCheck:
 				userList = []
 				for UserDict in temp_list:
 					if UserDict['会员账号'] == username:
-						UserDict['最后投注时间'] = str(lastBet) if lastBet else ""
+						if lastBetTime:
+							UserDict['最后投注时间'] = str(lastBet) if lastBet else '账号错误'
+						if chargeTimes:
+							UserDict['存款次数'] = str(rechargeTimes) if rechargeTimes else ''
+							UserDict['代充次数'] = str(upAmountTimes) if upAmountTimes else ''
 			else:
 				temp = {
-					'会员账号': username,
-					'最后投注时间': str(lastBet) if lastBet else ""
+					'会员账号': username
 					}
+				if lastBetTime:
+					temp['最后投注时间'] = str(lastBet) if lastBet else ""
+				if chargeTimes:
+					temp['存款次数'] = str(rechargeTimes) if rechargeTimes else ''
+					temp['代充次数'] = str(upAmountTimes) if upAmountTimes else ''
 				temp_list.append(temp)
 		else:
 			temp = {
-			'会员账号': username,
-			'最后投注时间': str(lastBet) if lastBet else ""
-			}
+				'会员账号': username
+				}
+			if lastBetTime:
+				temp['最后投注时间'] = str(lastBet) if lastBet else ""
+			if chargeTimes:
+				temp['存款次数'] = str(rechargeTimes) if rechargeTimes else ''
+				temp['代充次数'] = str(upAmountTimes) if upAmountTimes else ''
 			temp_list.append(temp)
-		#print(temp_list)
-	print(len(temp_list))
+
 	end = pd.DataFrame(temp_list)
 	end.to_csv("数据.csv",encoding="utf_8_sig")
-	print("最后投注时间完成。")
+	if error_acc:
+		print('以下为 错误账号\n')
+		for i in error_acc:
+			print(i)
+		print('-'*30)
+	print("会员数据完成。")
 	return temp_list
 	
 def get_list(driver):
@@ -355,8 +384,13 @@ if __name__ == "__main__":
 			if lastBetTime in ['y','n']:
 				lastBetTime = checkTrueFalse(lastBetTime)
 				break
+		while True:
+			chargeTimes = input('是否需要查询(代)充值次数(y/n)?：').lower()
+			if chargeTimes in ['y','n']:
+				chargeTimes = checkTrueFalse(chargeTimes)
+				break
 		clean()
-		print(f'True => 是 \nFalse => 否\n\n体育流水查询：{sportCheck}\n娱乐流水查询：{NsportCheck}\n最后投注时间查询：{lastBetTime}')
+		print(f'True => 是 \nFalse => 否\n\n体育流水查询：{sportCheck}\n娱乐流水查询：{NsportCheck}\n最后投注时间查询：{lastBetTime}\n(代)充值次数查询：{chargeTimes}')
 		doubleCheck = input('上述正确(y/n)?：').lower()
 		if doubleCheck == 'y':
 			break
@@ -372,7 +406,7 @@ if __name__ == "__main__":
 			Game_inquiry(driver)
 		input("請先篩選娱乐場館 -> 篩選完後小黑窗按Enter #不需要點擊查詢")
 		temp_list = Nsport_search(driver,temp_list,sportCheck)
-	if lastBetTime:
+	if lastBetTime or chargeTimes:
 		temp_list = user_info_search(driver,temp_list,sportCheck,NsportCheck)
 	input("数据已导出'数据.csv',可以关闭了")
 
