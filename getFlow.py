@@ -8,7 +8,6 @@ import zipfile
 import requests
 import pandas as pd
 from tqdm import tqdm
-from openpyxl  import load_workbook
 from getpass import getpass
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -29,7 +28,7 @@ option.add_experimental_option("prefs", {"credentials_enable_service": False,"pr
 capabilities = DesiredCapabilities.CHROME
 capabilities["goog:loggingPrefs"] = {"performance": "ALL"}
 
-local_version = 'v1.3.0'
+local_version = 'v1.4.5'
 url = "https://api.github.com/repos/DinforML/workingTools/releases/latest"
 download_url = "https://github.com/DinforML/workingTools/releases/download/%s/default.zip"
 
@@ -56,11 +55,11 @@ def check_version():
 		print("下载完毕。")
 		if os.path.getsize(name) != 0:
 			with zipfile.ZipFile(name,"r") as zip_ref:
-				zip_ref.extractall()
+				zip_ref.extractall(path=f'./workingTools {online_version}')
 			#os.rename('default',f'WorkingTools-{online_version}')
 			os.remove(name)
 		input(f'请使用新版本 {online_version}\npress ENTER to quit...')
-		os.start('getFlow.exe')
+		os.startfile(f'workingTools {online_version}')
 		exit()
 
 
@@ -85,10 +84,13 @@ def login(driver):
 		code.clear()
 		v_code = input("Code: ")
 		code.send_keys(v_code)
-		submit.click()
 		try:
-			tex = WebDriverWait(driver, 1.5, 0.5).until(EC.visibility_of_element_located((By.XPATH,'/html/body/div[2]/div/span/div/div/div/span')))
-			print(tex.text)
+			if acc and pwd and v_code:
+				submit.click()
+				tex = WebDriverWait(driver, 1.5, 0.5).until(EC.visibility_of_element_located((By.XPATH,'/html/body/div[2]/div/span/div/div/div/span')))
+				print(tex.text)
+			else:
+				print('请填写账号 & 密码 & 验证码！')
 			account.clear()
 			password.clear()
 			code.clear()
@@ -105,6 +107,7 @@ def timeStamp(timeNum):
 	return timeStyle
 
 def get_responce_Info():
+	mainDomain = "http://fundmng.m6admin.com/api/" if version.lower() == 'ml' else "http://fundmng.bbuatback.com/api/"
 	logs_raw = driver.get_log("performance")
 	logs = [json.loads(lr["message"])["message"] for lr in logs_raw]
 	def log_filter(log_):
@@ -112,14 +115,15 @@ def get_responce_Info():
 	for log in filter(log_filter, logs):
 		request_id = log["params"]["requestId"]
 		resp_url = log["params"]["response"]["url"]
-		if resp_url == "http://fundmng.m6admin.com/api/manage/data/user/detail/by/username":
+		if resp_url == f"{mainDomain}manage/data/user/detail/by/username":
 			data = driver.execute_cdp_cmd("Network.getResponseBody", {"requestId": request_id})['body']
 			data = json.loads(data)
 			if data['message'].lower() == 'success':
 				lastBetTime = str(timeStamp(data['data']['lastBettingTime'])) if data['data']['lastBettingTime'] else "无投注"
+				parent = data['data']['parentName']
 			else:
-				return '账号错误' , '账号错误' , '账号错误'
-		if resp_url == "http://fundmng.m6admin.com/api/manage/data/trend/userFund":
+				return '账号错误' , '账号错误' , '账号错误' , '账号错误'
+		if resp_url == f"{mainDomain}manage/data/trend/userFund":
 			data = driver.execute_cdp_cmd("Network.getResponseBody", {"requestId": request_id})['body']
 			data = json.loads(data)
 			if data['message'].lower() == 'success':
@@ -127,7 +131,7 @@ def get_responce_Info():
 				upAmountTimes = str(data['data']['upAmountTimes'])
 			else:
 				rechargeTimes = upAmountTimes = '-'
-	return lastBetTime, rechargeTimes , upAmountTimes
+	return lastBetTime, rechargeTimes , upAmountTimes , parent
 
 
 def Game_inquiry(driver):
@@ -171,8 +175,15 @@ def sport_search(driver,temp_list):
 			}
 		temp_list.append(temp)
 		time.sleep(0.5)
-	end = pd.DataFrame(temp_list)
-	end.to_csv("数据.csv",encoding="utf_8_sig")
+	while True:
+		try:
+			end = pd.DataFrame(temp_list)
+			end.to_csv("数据.csv",encoding="utf_8_sig")
+			break
+		except:
+			input('请先关闭 数据.csv 窗口，然后按下Enter 以继续进行')
+	#end = pd.DataFrame(temp_list)
+	#end.to_csv("数据.csv",encoding="utf_8_sig")
 	print("体育流水完成。")
 	return temp_list
 
@@ -232,8 +243,15 @@ def Nsport_search(driver,temp_list,sportCheck):
 			temp_list.append(temp)
 
 		time.sleep(0.5)
-	end = pd.DataFrame(temp_list)
-	end.to_csv("数据.csv",encoding="utf_8_sig")
+	while True:
+		try:
+			end = pd.DataFrame(temp_list)
+			end.to_csv("数据.csv",encoding="utf_8_sig")
+			break
+		except:
+			input('请先关闭 数据.csv 窗口，然后按下Enter 以继续进行')
+	#end = pd.DataFrame(temp_list)
+	#end.to_csv("数据.csv",encoding="utf_8_sig")
 	print("娱乐流水完成。")
 	return temp_list
 
@@ -254,7 +272,7 @@ def user_info_search(driver,temp_list,sportCheck,NsportCheck):
 				input_username.send_keys(username)
 				input_username.send_keys(Keys.ENTER)
 				time.sleep(0.5)
-				lastBet , rechargeTimes , upAmountTimes = get_responce_Info()
+				lastBet , rechargeTimes , upAmountTimes , UParent = get_responce_Info()
 				break
 			except:
 				driver.refresh()
@@ -269,6 +287,8 @@ def user_info_search(driver,temp_list,sportCheck,NsportCheck):
 						if chargeTimes:
 							UserDict['存款次数'] = str(rechargeTimes) if rechargeTimes else ''
 							UserDict['代充次数'] = str(upAmountTimes) if upAmountTimes else ''
+						if userParent:
+							UserDict['上级代理'] = str(UParent) if UParent else ''
 			else:
 				temp = {
 					'会员账号': username
@@ -278,6 +298,8 @@ def user_info_search(driver,temp_list,sportCheck,NsportCheck):
 				if chargeTimes:
 					temp['存款次数'] = str(rechargeTimes) if rechargeTimes else ''
 					temp['代充次数'] = str(upAmountTimes) if upAmountTimes else ''
+				if userParent:
+					temp['上级代理'] = str(UParent) if UParent else ''
 				temp_list.append(temp)
 		else:
 			temp = {
@@ -288,10 +310,18 @@ def user_info_search(driver,temp_list,sportCheck,NsportCheck):
 			if chargeTimes:
 				temp['存款次数'] = str(rechargeTimes) if rechargeTimes else ''
 				temp['代充次数'] = str(upAmountTimes) if upAmountTimes else ''
+			if userParent:
+				temp['上级代理'] = str(UParent) if UParent else ''
 			temp_list.append(temp)
 
-	end = pd.DataFrame(temp_list)
-	end.to_csv("数据.csv",encoding="utf_8_sig")
+	while True:
+		try:
+			end = pd.DataFrame(temp_list)
+			end.to_csv("数据.csv",encoding="utf_8_sig")
+			break
+		except:
+			input('请先关闭 数据.csv 窗口，然后按下Enter 以继续进行')
+	#end.to_csv("数据.csv",encoding="utf_8_sig")
 	if error_acc:
 		print('以下为 错误账号\n')
 		for i in error_acc:
@@ -358,7 +388,7 @@ def checkTrueFalse(check):
 if __name__ == "__main__":
 	check_version()
 	while True:
-		version = input("平台是(bb/ml)?: ")
+		version = input("平台是(bb/ml)?: ").lower()
 		if version.lower() == 'bb':
 			domain = "http://fundmng.aballbet.com/login"
 			break
@@ -389,8 +419,13 @@ if __name__ == "__main__":
 			if chargeTimes in ['y','n']:
 				chargeTimes = checkTrueFalse(chargeTimes)
 				break
+		while True:
+			userParent = input('是否需要查询上级代理(y/n)?：').lower()
+			if userParent in ['y','n']:
+				userParent = checkTrueFalse(userParent)
+				break
 		clean()
-		print(f'True => 是 \nFalse => 否\n\n体育流水查询：{sportCheck}\n娱乐流水查询：{NsportCheck}\n最后投注时间查询：{lastBetTime}\n(代)充值次数查询：{chargeTimes}')
+		print(f'True => 是 \nFalse => 否\n\n体育流水查询：{sportCheck}\n娱乐流水查询：{NsportCheck}\n最后投注时间查询：{lastBetTime}\n(代)充值次数查询：{chargeTimes}\n上级代理查询：{userParent}')
 		doubleCheck = input('上述正确(y/n)?：').lower()
 		if doubleCheck == 'y':
 			break
@@ -406,7 +441,7 @@ if __name__ == "__main__":
 			Game_inquiry(driver)
 		input("請先篩選娱乐場館 -> 篩選完後小黑窗按Enter #不需要點擊查詢")
 		temp_list = Nsport_search(driver,temp_list,sportCheck)
-	if lastBetTime or chargeTimes:
+	if lastBetTime or chargeTimes or userParent:
 		temp_list = user_info_search(driver,temp_list,sportCheck,NsportCheck)
 	input("数据已导出'数据.csv',可以关闭了")
 
